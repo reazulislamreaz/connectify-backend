@@ -1,5 +1,7 @@
 # Connectify — Real-Time Chat & Social Backend
 
+![Connectify Screenshot](https://i.postimg.cc/HxpDfdRX/Screenshot-from-2026-05-25-11-49-06.png)
+
 Production-oriented REST and WebSocket API for a full-featured messaging and social app: authentication, friend graph, direct messaging (text, images, voice), social feed, presence, and audio calls powered by ZEGOCLOUD.
 
 Built with **Node.js**, **Express**, **TypeScript**, **MongoDB**, **Socket.IO**, and optional **Redis** for caching and horizontal scaling.
