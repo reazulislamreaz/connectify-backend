@@ -4,6 +4,8 @@ Production-oriented REST and WebSocket API for a full-featured messaging and soc
 
 Built with **Node.js**, **Express**, **TypeScript**, **MongoDB**, **Socket.IO**, and optional **Redis** for caching and horizontal scaling.
 
+**Live API base URL:** `https://easyconnectify.duckdns.org`
+
 ---
 
 ## Highlights for reviewers
@@ -16,6 +18,7 @@ Built with **Node.js**, **Express**, **TypeScript**, **MongoDB**, **Socket.IO**,
 | **Media** | AWS S3 uploads (avatars, post/message images, voice notes) |
 | **Scale-ready** | Redis cache layer, Socket.IO Redis adapter for multi-instance fan-out |
 | **Calls** | Server-minted ZEGOCLOUD RTC tokens; call state + logs via WebSocket events |
+| **AI (planned)** | On-demand `/api/ai/*` — smart reply, translation, summaries, moderation, transcription |
 
 ---
 
@@ -30,6 +33,42 @@ Built with **Node.js**, **Express**, **TypeScript**, **MongoDB**, **Socket.IO**,
 - **Social feed** — Posts with images, likes, threaded comments
 - **Voice calls** — Invite/accept/reject flow over sockets; ZEGOCLOUD RTC tokens from REST
 - **Operations** — Health check, graceful shutdown, structured error handling
+
+---
+
+## Roadmap — AI features (planned)
+
+AI capabilities are **not implemented yet**. They are on the product roadmap to add everyday value for users (faster replies, safer community, easier catch-up) without replacing core messaging or real-time delivery.
+
+### Planned capabilities
+
+| Feature | Value for users |
+|---------|-----------------|
+| **Smart reply** | One-tap reply suggestions in 1:1 chat — less typing, faster conversations |
+| **Message translation** | Chat across languages (e.g. Bengali ↔ English) without leaving the app |
+| **Chat summary** | Catch up on long threads with a short recap instead of scrolling hundreds of messages |
+| **Content moderation** | Safer feed and DMs — detect toxic, spam, or abusive text (and optionally images) before or after publish |
+| **Voice transcription** | Turn voice notes into readable text — accessibility, search, and skim-at-a-glance |
+| **In-app AI assistant** | Help draft messages or posts, rephrase tone, or answer questions in context |
+| **Semantic search** | Find messages or posts by meaning, not only exact keywords |
+
+### How it will fit this backend
+
+- New module: `src/modules/ai/` with routes under `/api/ai/*` (JWT-protected, rate-limited).
+- AI runs **on demand** — not on the hot path for `POST /api/messages` or Socket.IO `send_message` / `receive_message`, so normal chat stays fast.
+- Provider options (choose per environment):
+  - **Managed API** (OpenAI, Anthropic, etc.) — fastest to ship; pay per request.
+  - **Self-hosted Ollama** — no per-token bill; you host models on your own GPU/server (hardware and ops cost instead).
+- Heavy work (e.g. moderation scans, long summaries) can use **async jobs** or queues later if volume grows.
+
+### Suggested rollout order
+
+1. Smart reply + translation — highest daily use in chat.
+2. Voice transcription + chat summary — builds on existing voice messages and thread history.
+3. Content moderation — protect feed and DMs as usage grows.
+4. Semantic search + in-app assistant — broader discovery and productivity.
+
+See [docs/API.md](docs/API.md) for current endpoints; AI routes will be documented there when shipped.
 
 ---
 
@@ -105,7 +144,8 @@ src/
 │   ├── message/           # Messages CRUD
 │   ├── chat/              # Conversation list
 │   ├── post/              # Feed, likes, comments
-│   └── call/              # ZEGOCLOUD config & tokens
+│   ├── call/              # ZEGOCLOUD config & tokens
+│   └── ai/                # (planned) LLM features — smart reply, translate, summarize, etc.
 ├── socket/                # Real-time handlers (messages, calls)
 ├── services/              # Presence
 ├── cache/                 # Redis keys & invalidation
@@ -168,9 +208,17 @@ npm run build
 npm start
 ```
 
-Server listens on `http://localhost:5001` (or your `PORT`).
+Server listens on `http://localhost:5001` (or your `PORT`) when running locally.
 
 ### Verify
+
+**Production**
+
+```bash
+curl https://easyconnectify.duckdns.org/health
+```
+
+**Local**
 
 ```bash
 curl http://localhost:5001/health
@@ -196,6 +244,19 @@ Full endpoint reference, request/response shapes, and WebSocket event catalog:
 
 **[docs/API.md](docs/API.md)**
 
+### Base URLs
+
+| Environment | Base URL |
+|-------------|----------|
+| **Production** | `https://easyconnectify.duckdns.org` |
+| **Local** | `http://localhost:5001` |
+
+All REST routes are prefixed with the base URL. Examples:
+
+- Health: `GET https://easyconnectify.duckdns.org/health`
+- Register: `POST https://easyconnectify.duckdns.org/api/auth/register`
+- Messages: `POST https://easyconnectify.duckdns.org/api/messages`
+
 Quick reference:
 
 | Prefix | Purpose |
@@ -211,7 +272,19 @@ Quick reference:
 
 **Authentication:** Protected routes accept `Authorization: Bearer <token>` or the `token` HTTP-only cookie set on register/login.
 
-**WebSocket:** Connect to the same host/port as the HTTP server. Pass JWT via `auth.token` or `Authorization` header. See [docs/API.md](docs/API.md#websocket-events).
+**WebSocket:** Connect to the same host as the HTTP server. Pass JWT via `auth.token` or `Authorization` header. See [docs/API.md](docs/API.md#websocket-events).
+
+```javascript
+import { io } from "socket.io-client";
+
+// Production
+const socket = io("https://easyconnectify.duckdns.org", {
+  auth: { token: "<jwt>" },
+});
+
+// Local development
+// const socket = io("http://localhost:5001", { auth: { token: "<jwt>" } });
+```
 
 ---
 
