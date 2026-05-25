@@ -1,6 +1,7 @@
 {
-  "name": "chatting-app-backend",
+  "name": "connectify-backend",
   "version": "1.0.0",
+  "description": "Connectify API — Node.js REST + Socket.IO backend for real-time chat, feed, friends, and calls",
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",

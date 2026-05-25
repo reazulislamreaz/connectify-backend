@@ -1,12 +1,18 @@
-# Connectify — Real-Time Chat & Social Backend
+# Connectify — Backend
+
+> **About:** REST and WebSocket API for [Connectify](https://easy-connectify.vercel.app) — real-time 1:1 chat, social feed, friends, presence, S3 media, and ZEGOCLOUD voice calls. Web client: [connectify-frontend](https://github.com/reazulislamreaz/connectify-frontend).
 
 ![Connectify Screenshot](https://i.postimg.cc/HxpDfdRX/Screenshot-from-2026-05-25-11-49-06.png)
 
-Production-oriented REST and WebSocket API for a full-featured messaging and social app: authentication, friend graph, direct messaging (text, images, voice), social feed, presence, and audio calls powered by ZEGOCLOUD.
+Production-oriented **Node.js** API: authentication, friend graph, direct messaging (text, images, voice), social feed, presence, and audio calls.
 
-Built with **Node.js**, **Express**, **TypeScript**, **MongoDB**, **Socket.IO**, and optional **Redis** for caching and horizontal scaling.
+Built with **Express**, **TypeScript**, **MongoDB**, **Socket.IO**, and optional **Redis** for caching and horizontal scaling.
 
-**Live API base URL:** `https://easyconnectify.duckdns.org`
+| | |
+|---|---|
+| **Live API** | [https://easyconnectify.duckdns.org](https://easyconnectify.duckdns.org) |
+| **Live app** | [https://easy-connectify.vercel.app](https://easy-connectify.vercel.app) |
+| **Frontend repo** | [connectify-frontend](https://github.com/reazulislamreaz/connectify-frontend) |
 
 ---
 
@@ -169,8 +175,8 @@ src/
 ### Installation
 
 ```bash
-git clone <repository-url>
-cd chatting-app-backend
+git clone https://github.com/reazulislamreaz/connectify-backend.git
+cd connectify-backend
 npm install
 cp .env.example .env
 # Edit .env with your values (see Environment variables)
