@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { generateToken04 } from "../../utils/zegoServerAssistant";
 import { env } from "../../config/env";
-import { getZegoAppId, getZegoServerSecret } from "../../config/zego";
+import { getZegoAppId, getZegoServerSecret, isZegoConfigured } from "../../config/zego";
 import { friendRequestService } from "../friendRequest/friendRequest.service";
 import { AppError } from "../../utils/AppError";
 
@@ -37,8 +37,11 @@ export class CallService {
       );
     }
 
-    if (!env.ZEGOCLOUD_SERVER_SECRET.trim()) {
-      throw new AppError(503, "ZEGOCLOUD_SERVER_SECRET is not configured");
+    if (!isZegoConfigured()) {
+      throw new AppError(
+        503,
+        "ZEGOCLOUD_SERVER_SECRET must be exactly 32 characters from the ZEGOCLOUD console (Server Secret, not App Sign)",
+      );
     }
     const secret = getZegoServerSecret();
 

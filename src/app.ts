@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import { cache } from "./cache/cache.service";
 import { isRedisEnabled } from "./config/redis";
 import { corsOriginValidator } from "./config/cors";
+import { getZegoAppId, isZegoConfigured } from "./config/zego";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFoundHandler } from "./middleware/notFoundHandler";
 import {
@@ -46,6 +47,9 @@ app.get("/health", async (_req, res) => {
     success: true,
     message: "Server is running",
     redis: isRedisEnabled() ? (redisOk ? "connected" : "error") : "disabled",
+    zego: isZegoConfigured()
+      ? { configured: true, appId: getZegoAppId() }
+      : { configured: false, appId: getZegoAppId() },
   });
 });
 

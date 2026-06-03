@@ -8,13 +8,16 @@ export function getZegoAppId(): number {
 }
 
 /**
- * token04 requires a 32-character ServerSecret.
- * Demo secrets are padded; replace with your real 32-char secret from the console.
+ * token04 requires the exact 32-character Server Secret from the ZEGOCLOUD console
+ * (Project Settings → ServerSecret). Do not use App Sign here.
  */
 export function getZegoServerSecret(): string {
-  const secret = env.ZEGOCLOUD_SERVER_SECRET.trim();
-  if (secret.length === 32) return secret;
-  return secret.padEnd(32, "0").slice(0, 32);
+  return env.ZEGOCLOUD_SERVER_SECRET.trim();
+}
+
+export function isZegoConfigured(): boolean {
+  const secret = getZegoServerSecret();
+  return getZegoAppId() > 0 && secret.length === 32;
 }
 
 export function getZegoServerUrl(): string {
