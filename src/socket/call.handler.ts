@@ -1,5 +1,6 @@
 import { Server, Socket } from "socket.io";
 import { User } from "../modules/auth/auth.model";
+import { AppError } from "../utils/AppError";
 import { callService } from "../modules/call/call.service";
 import { messageService } from "../modules/message/message.service";
 import type { CallLogStatus } from "../constants/call";
@@ -176,7 +177,10 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
         data: { callId, roomId, calleeId },
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start call";
+      const message =
+        err instanceof AppError || err instanceof Error
+          ? err.message
+          : "Failed to start call";
       callback?.({ success: false, message });
     }
   });

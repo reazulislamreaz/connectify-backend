@@ -16,7 +16,10 @@ const userActiveCall = new Map<string, string>();
 
 export function registerCall(session: CallSession): void {
   calls.set(session.callId, session);
+  // Mark both parties during ring so callee can't start another outbound call
+  // and other users see "busy" while the phone is ringing.
   userActiveCall.set(session.callerId, session.callId);
+  userActiveCall.set(session.calleeId, session.callId);
 }
 
 export function getCall(callId: string): CallSession | undefined {

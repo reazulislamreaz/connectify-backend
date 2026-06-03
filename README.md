@@ -78,6 +78,35 @@ AI capabilities are **not implemented yet**. They are on the product roadmap to 
 
 See [docs/API.md](docs/API.md) for current endpoints; AI routes will be documented there when shipped.
 
+### Voice calls — troubleshooting
+
+Calls need **two layers** working: Socket.IO signaling, then ZEGOCLOUD audio.
+
+| Symptom | Likely cause | Fix |
+|---------|----------------|-----|
+| No incoming ring on callee | Socket not connected or CORS | Add frontend origin to `CLIENT_URL` (e.g. `https://easy-connectify.vercel.app`). Use `https://` for `NEXT_PUBLIC_SOCKET_URL` on Vercel. |
+| Toast: "Could not start call" / "You can only call friends" | Not friends or socket error | Both users must be **accepted friends**. Check browser console / Network for socket errors. |
+| Toast: "User is busy" | Stuck in-memory call state | Both refresh; restart API if needed (call state is in server RAM). |
+| Ring works, then "Could not connect audio call" | ZEGOCLOUD misconfigured | Set numeric `ZEGOCLOUD_APP_ID` and **exactly 32-char** `ZEGOCLOUD_SERVER_SECRET` from the [ZEGOCLOUD console](https://console.zegocloud.com). Restart backend after `.env` changes. |
+| Toast: ZEGOCLOUD_APP_ID message | `appId` is 0 on server | Same as above — production VPS `.env` must match console, not only local `.env`. |
+| No audio after "On call" | Mic permission or browser | Allow microphone; use HTTPS (Vercel is fine). |
+
+**Quick checks**
+
+```bash
+# Server up
+curl https://easyconnectify.duckdns.org/health
+
+# Socket.IO reachable (should be 200)
+curl -o /dev/null -w "%{http_code}\n" \
+  "https://easyconnectify.duckdns.org/socket.io/?EIO=4&transport=polling"
+
+# After login, config should show appId > 0
+curl -H "Authorization: Bearer <jwt>" https://easyconnectify.duckdns.org/api/calls/config
+```
+
+**Production checklist:** `CLIENT_URL` includes Vercel URL · ZEGOCLOUD vars on **VPS** · both users logged in with socket connected (messages/delivery work) · friends · mic allowed.
+
 ---
 
 ## Tech stack
