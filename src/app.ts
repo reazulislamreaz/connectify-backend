@@ -9,6 +9,7 @@ import { corsOriginValidator } from "./config/cors";
 import {
   getZegoAppId,
   getZegoSecretFingerprint,
+  isLikelyWrongZegoSecret,
   isZegoConfigured,
 } from "./config/zego";
 import { errorHandler } from "./middleware/errorHandler";
@@ -56,6 +57,9 @@ app.get("/health", async (_req, res) => {
           configured: true,
           appId: getZegoAppId(),
           secretFingerprint: getZegoSecretFingerprint(),
+          secretWarning: isLikelyWrongZegoSecret()
+            ? "SERVER_SECRET appears to be derived from APP_SIGN — use Server Secret from Zego console"
+            : null,
         }
       : { configured: false, appId: getZegoAppId() },
   });

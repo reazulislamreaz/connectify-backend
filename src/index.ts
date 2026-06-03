@@ -7,10 +7,12 @@ import { env } from "./config/env";
 import { allowedOrigins } from "./config/cors";
 import { setupSocket } from "./socket/socket.handler";
 import { attachSocketRedisAdapter, disconnectSocketRedis } from "./config/socketAdapter";
+import { logZegoStartupStatus } from "./config/zego";
 
 async function bootstrap() {
   await connectDatabase();
   await connectRedis();
+  logZegoStartupStatus();
 
   const server = http.createServer(app);
 

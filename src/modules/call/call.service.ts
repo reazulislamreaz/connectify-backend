@@ -1,7 +1,11 @@
 import crypto from "crypto";
 import { generateToken04 } from "../../utils/zegoServerAssistant";
 import { env } from "../../config/env";
-import { getZegoAppId, getZegoServerSecret, isZegoConfigured } from "../../config/zego";
+import {
+  getZegoAppId,
+  getZegoServerSecret,
+  isZegoConfigured,
+} from "../../config/zego";
 import { friendRequestService } from "../friendRequest/friendRequest.service";
 import { AppError } from "../../utils/AppError";
 
@@ -46,10 +50,7 @@ export class CallService {
     const secret = getZegoServerSecret();
 
     try {
-      const useStrict =
-        process.env.ZEGO_TOKEN_STRICT !== "false" &&
-        process.env.ZEGO_TOKEN_STRICT !== "0";
-      const payload = useStrict
+      const payload = env.ZEGO_TOKEN_STRICT
         ? JSON.stringify({
             room_id: roomId,
             privilege: { 1: 1, 2: 1 },

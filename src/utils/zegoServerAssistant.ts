@@ -1,11 +1,7 @@
 /**
- * Official ZEGOCLOUD token04 generator (pinned from zego_server_assistant repo).
- * @see zegoServerAssistant.official.js
+ * Re-exports official ZEGOCLOUD token04 generator (see zegoServerAssistant.official.js).
  */
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { generateToken04 } = require("./zegoServerAssistant.official.js") as {
   generateToken04: (
     appId: number,

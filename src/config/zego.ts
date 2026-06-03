@@ -34,3 +34,31 @@ export function getZegoSecretFingerprint(): string | null {
     .digest("hex")
     .slice(0, 8);
 }
+
+export function isLikelyWrongZegoSecret(): boolean {
+  const secret = getZegoServerSecret();
+  const sign = env.ZEGOCLOUD_APP_SIGN.trim();
+  return sign.length >= 32 && secret === sign.slice(0, 32);
+}
+
+export function logZegoStartupStatus(): void {
+  const appId = getZegoAppId();
+  if (!appId) {
+    console.warn("[zego] ZEGOCLOUD_APP_ID missing — voice calls disabled");
+    return;
+  }
+  if (!isZegoConfigured()) {
+    console.warn(
+      "[zego] ZEGOCLOUD_SERVER_SECRET must be exactly 32 characters (Server Secret from console, not App Sign)",
+    );
+    return;
+  }
+  if (isLikelyWrongZegoSecret()) {
+    console.warn(
+      "[zego] ZEGOCLOUD_SERVER_SECRET matches the start of ZEGOCLOUD_APP_SIGN — use Server Secret only",
+    );
+  }
+  console.log(
+    `[zego] Voice calls enabled (appId=${appId}, secretFingerprint=${getZegoSecretFingerprint()})`,
+  );
+}

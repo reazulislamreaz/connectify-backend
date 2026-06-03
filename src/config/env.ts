@@ -41,6 +41,12 @@ const envSchema = z.object({
   ZEGOCLOUD_SERVER_URL: z
     .string()
     .default("wss://webliveroom-api.zego.im/ws"),
+  /** When false, mints a general token (empty payload). Use only if room privilege auth is off in Zego console. */
+  ZEGO_TOKEN_STRICT: z
+    .string()
+    .optional()
+    .default("true")
+    .transform((v) => v !== "false" && v !== "0"),
 });
 
 const parsed = envSchema.safeParse(process.env);
