@@ -46,11 +46,16 @@ export class CallService {
     const secret = getZegoServerSecret();
 
     try {
-      const payload = JSON.stringify({
-        room_id: roomId,
-        privilege: { 1: 1, 2: 1 },
-        stream_id_list: null,
-      });
+      const useStrict =
+        process.env.ZEGO_TOKEN_STRICT !== "false" &&
+        process.env.ZEGO_TOKEN_STRICT !== "0";
+      const payload = useStrict
+        ? JSON.stringify({
+            room_id: roomId,
+            privilege: { 1: 1, 2: 1 },
+            stream_id_list: null,
+          })
+        : "";
       return generateToken04(
         appId,
         userId,

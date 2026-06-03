@@ -87,7 +87,7 @@ Calls need **two layers** working: Socket.IO signaling, then ZEGOCLOUD audio.
 | No incoming ring on callee | Socket not connected or CORS | Add frontend origin to `CLIENT_URL` (e.g. `https://easy-connectify.vercel.app`). Use `https://` for `NEXT_PUBLIC_SOCKET_URL` on Vercel. |
 | Toast: "Could not start call" / "You can only call friends" | Not friends or socket error | Both users must be **accepted friends**. Check browser console / Network for socket errors. |
 | Toast: "User is busy" | Stuck in-memory call state | Both refresh; restart API if needed (call state is in server RAM). |
-| Ring works, then "Could not connect audio call" | ZEGOCLOUD misconfigured | Set numeric `ZEGOCLOUD_APP_ID` and **exactly 32-char** `ZEGOCLOUD_SERVER_SECRET` from the [ZEGOCLOUD console](https://console.zegocloud.com). Restart backend after `.env` changes. |
+| Ring works, then "Could not connect audio call" | Zego **200101 auth failure** (token rejected) | In [ZEGOCLOUD console](https://console.zegocloud.com), open the project for your App ID, copy **Server Secret** (32 chars only — not App Sign). Set `ZEGOCLOUD_SERVER_SECRET` on the VPS to match that project, then restart the API. |
 | Toast: ZEGOCLOUD_APP_ID message | `appId` is 0 on server | Same as above — production VPS `.env` must match console, not only local `.env`. |
 | No audio after "On call" | Mic permission or browser | Allow microphone; use HTTPS (Vercel is fine). |
 

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { env } from "./env";
 
 /** Zego App ID must be numeric in the console; demo strings fall back to 0. */
@@ -22,4 +23,14 @@ export function isZegoConfigured(): boolean {
 
 export function getZegoServerUrl(): string {
   return env.ZEGOCLOUD_SERVER_URL;
+}
+
+/** Compare this value between local and VPS /health to confirm the same Server Secret is deployed. */
+export function getZegoSecretFingerprint(): string | null {
+  if (!isZegoConfigured()) return null;
+  return crypto
+    .createHash("sha256")
+    .update(getZegoServerSecret())
+    .digest("hex")
+    .slice(0, 8);
 }
