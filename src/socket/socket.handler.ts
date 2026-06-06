@@ -45,6 +45,18 @@ export function setupSocket(io: Server): void {
     await presenceService.markOnline(userId);
     void broadcastPresenceToFriends(io, userId, true);
 
+    // Deliver anything that arrived while this user was offline, and tell senders.
+    void messageService
+      .markAllDelivered(userId)
+      .then(({ senderIds }) => {
+        for (const senderId of senderIds) {
+          io.to(`user:${senderId}`).emit("messages_delivered", {
+            receiverId: userId,
+          });
+        }
+      })
+      .catch((err) => console.error("markAllDelivered error:", err));
+
     const presenceHeartbeat = setInterval(() => {
       void presenceService.refreshOnline(userId);
     }, 45_000);
@@ -95,6 +107,22 @@ export function setupSocket(io: Server): void {
         });
       } catch (err) {
         console.error("message_read error:", err);
+      }
+    });
+
+    // Recipient's client acks delivery (single tick) as soon as it receives a message.
+    socket.on("message_delivered", async (data: { senderId: string }) => {
+      if (!limitRead()) return;
+
+      try {
+        const result = await messageService.markDelivered(userId, data.senderId);
+        if (result.modifiedCount > 0) {
+          io.to(`user:${data.senderId}`).emit("messages_delivered", {
+            receiverId: userId,
+          });
+        }
+      } catch (err) {
+        console.error("message_delivered error:", err);
       }
     });
 

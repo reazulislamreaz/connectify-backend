@@ -379,6 +379,10 @@ All routes require authentication. Real-time delivery also emits Socket.IO event
 
 `callType`: `"audio"` | `"video"` (present on call logs; older logs without the field are treated as `"audio"`)
 
+`delivered`: `boolean` — message reached the recipient (single tick). Set when the recipient's client acks via `message_delivered`, or swept on their next connect. Reading implies delivered.
+
+`read`: `boolean` — recipient has seen the message (double tick).
+
 ---
 
 ### `POST /api/messages`
@@ -661,6 +665,7 @@ On connect, the server joins the socket to room `user:{userId}`.
 |-------|---------|--------------|------------|
 | `send_message` | `{ receiverId, content, replyToId? }` | `{ success, data?, message? }` | 60/min |
 | `message_read` | `{ senderId }` | — | 120/min |
+| `message_delivered` | `{ senderId }` | — | 120/min |
 | `typing` | `{ receiverId, isTyping }` | — | 120/min |
 | `call:invite` | `{ calleeId, callType? }` | `{ success, data?, message? }` | 20/min |
 | `call:accept` | `{ callId }` | `{ success, data?, message? }` | — |
@@ -677,7 +682,8 @@ On connect, the server joins the socket to room `user:{userId}`.
 | `receive_message` | Message object | New message (REST or socket) |
 | `message_updated` | Message object | Message edited |
 | `message_deleted` | Message object | Message soft-deleted |
-| `messages_read` | `{ readerId, modifiedCount }` | Peer read your messages |
+| `messages_read` | `{ readerId, modifiedCount }` | Peer read your messages (double tick) |
+| `messages_delivered` | `{ receiverId }` | Your messages reached the peer (single tick) |
 | `typing` | `{ userId, isTyping }` | Typing indicator |
 | `user_presence` | `{ userId, isOnline, lastSeen? }` | Friend online/offline |
 | `conversation_deleted` | `{ otherUserId }` | Thread removed |

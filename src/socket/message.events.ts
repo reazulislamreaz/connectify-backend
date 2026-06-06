@@ -16,6 +16,7 @@ export interface MessagePayload {
   callStatus?: CallLogStatus;
   callDuration?: number;
   callType?: CallType;
+  delivered?: boolean;
   read: boolean;
   isDeleted?: boolean;
   editedAt?: Date;

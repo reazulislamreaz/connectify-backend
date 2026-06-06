@@ -32,6 +32,7 @@ type MessageDoc = {
   callStatus?: CallLogStatus;
   callType?: CallType;
   callDuration?: number;
+  delivered?: boolean;
   read: boolean;
   isDeleted?: boolean;
   editedAt?: Date;
@@ -88,6 +89,7 @@ function formatMessage(
     callStatus: isCall && !isDeleted ? message.callStatus : undefined,
     callType: isCall ? message.callType ?? DEFAULT_CALL_TYPE : undefined,
     callDuration: isCall && !isDeleted ? message.callDuration ?? 0 : undefined,
+    delivered: Boolean(message.delivered) || message.read,
     read: message.read,
     isDeleted,
     editedAt: message.editedAt,
@@ -494,9 +496,11 @@ export class MessageService {
   }
 
   async markAsRead(receiverId: string, senderId: string) {
+    const now = new Date();
+    // Reading a message implies it was delivered, so set both in one pass.
     const result = await Message.updateMany(
       { senderId, receiverId, read: false },
-      { read: true, readAt: new Date() }
+      { read: true, readAt: now, delivered: true, deliveredAt: now }
     );
 
     if (result.modifiedCount > 0) {
@@ -505,6 +509,45 @@ export class MessageService {
     }
 
     return { modifiedCount: result.modifiedCount };
+  }
+
+  /** Mark messages from a specific sender to this receiver as delivered (single tick). */
+  async markDelivered(receiverId: string, senderId: string) {
+    const result = await Message.updateMany(
+      { senderId, receiverId, delivered: false },
+      { delivered: true, deliveredAt: new Date() }
+    );
+
+    if (result.modifiedCount > 0) {
+      await cacheInvalidate.messages(receiverId, senderId);
+    }
+
+    return { modifiedCount: result.modifiedCount };
+  }
+
+  /**
+   * Mark every undelivered message addressed to this receiver as delivered.
+   * Used when a user (re)connects, to deliver anything sent while they were offline.
+   * Returns the distinct sender ids so each can be notified.
+   */
+  async markAllDelivered(receiverId: string): Promise<{ senderIds: string[] }> {
+    const senders = await Message.distinct("senderId", {
+      receiverId,
+      delivered: false,
+    });
+    if (senders.length === 0) return { senderIds: [] };
+
+    await Message.updateMany(
+      { receiverId, delivered: false },
+      { delivered: true, deliveredAt: new Date() }
+    );
+
+    const senderIds = senders.map((s) => s.toString());
+    for (const senderId of senderIds) {
+      await cacheInvalidate.messages(receiverId, senderId);
+    }
+
+    return { senderIds };
   }
 
   async getUnreadCount(userId: string, fromUserId: string) {

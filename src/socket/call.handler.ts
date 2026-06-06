@@ -1,6 +1,7 @@
 import { Server, Socket } from "socket.io";
 import { User } from "../modules/auth/auth.model";
 import { AppError } from "../utils/AppError";
+import { resolveImageUrl } from "../config/s3";
 import { callService } from "../modules/call/call.service";
 import { messageService } from "../modules/message/message.service";
 import {
@@ -163,7 +164,10 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
         return;
       }
 
-      const caller = await User.findById(userId).select("name").lean();
+      const caller = await User.findById(userId)
+        .select("name profilePicture")
+        .lean();
+      const callerAvatar = resolveImageUrl(caller?.profilePicture);
       const callId = callService.createCallId();
       const roomId = callService.createRoomId(userId, calleeId);
 
@@ -183,6 +187,7 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
         roomId,
         callerId: userId,
         callerName: caller?.name ?? "Someone",
+        callerAvatar,
         callType,
       });
 

@@ -19,6 +19,8 @@ export interface IMessage extends Document {
   callStatus?: CallLogStatus;
   callType?: CallType;
   callDuration: number;
+  delivered: boolean;
+  deliveredAt?: Date;
   read: boolean;
   readAt?: Date;
   isDeleted: boolean;
@@ -37,6 +39,8 @@ const messageSchema = new Schema<IMessage>(
     callStatus: { type: String, enum: CALL_LOG_STATUS },
     callType: { type: String, enum: CALL_TYPE },
     callDuration: { type: Number, default: 0, min: 0 },
+    delivered: { type: Boolean, default: false },
+    deliveredAt: { type: Date },
     imageUrl: { type: String, default: "" },
     voiceUrl: { type: String, default: "" },
     voiceDuration: { type: Number, default: 0, min: 0, max: 60 },
