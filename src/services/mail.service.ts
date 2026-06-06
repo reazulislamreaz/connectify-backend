@@ -30,6 +30,18 @@ export function isMailConfigured(): boolean {
   return Boolean(env.SMTP_HOST && mailUser() && mailPass());
 }
 
+export function getMailHealth(): {
+  configured: boolean;
+  from: string | null;
+  frontendUrl: string;
+} {
+  return {
+    configured: isMailConfigured(),
+    from: isMailConfigured() ? senderEmail() : null,
+    frontendUrl: env.FRONTEND_URL,
+  };
+}
+
 function getTransporter(): Transporter | null {
   if (!isMailConfigured()) return null;
   if (!transporter) {
@@ -72,11 +84,9 @@ async function processQueue(): Promise<void> {
     const tx = getTransporter();
 
     if (!tx) {
-      if (env.NODE_ENV !== "production") {
-        console.warn(
-          `[mail] SMTP not configured — skipped "${job.subject}" to ${job.to}`,
-        );
-      }
+      console.warn(
+        `[mail] SMTP not configured — skipped "${job.subject}" to ${job.to}`,
+      );
       queue.shift();
       continue;
     }
@@ -100,6 +110,7 @@ async function processQueue(): Promise<void> {
           "X-Entity-Ref-ID": `connectify-${Date.now()}`,
         },
       });
+      console.log(`[mail] sent "${job.subject}" to ${job.to}`);
       queue.shift();
     } catch (err) {
       job.attempts += 1;
@@ -110,7 +121,9 @@ async function processQueue(): Promise<void> {
       if (job.attempts >= MAX_ATTEMPTS) {
         queue.shift(); // give up on this job
       } else {
-        await new Promise((resolve) => setTimeout(resolve, 1000 * job.attempts));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000 * job.attempts),
+        );
       }
     }
   }
@@ -142,7 +155,11 @@ function deliverabilityWarnings(): void {
     );
   }
 
-  if (env.MAIL_FROM && mailUser() && env.MAIL_FROM.toLowerCase() !== mailUser().toLowerCase()) {
+  if (
+    env.MAIL_FROM &&
+    mailUser() &&
+    env.MAIL_FROM.toLowerCase() !== mailUser().toLowerCase()
+  ) {
     console.warn(
       `[mail] MAIL_FROM (${env.MAIL_FROM}) differs from SMTP auth user (${mailUser()}) — SPF/DMARC alignment will fail.`,
     );
@@ -160,7 +177,11 @@ export function logMailStartupStatus(): void {
   deliverabilityWarnings();
   const tx = getTransporter();
   tx?.verify()
-    .then(() => console.log(`[mail] SMTP ready via ${env.SMTP_HOST} (from ${senderEmail()})`))
+    .then(() =>
+      console.log(
+        `[mail] SMTP ready via ${env.SMTP_HOST} (from ${senderEmail()})`,
+      ),
+    )
     .catch((err) =>
       console.error(
         "[mail] SMTP verify failed:",

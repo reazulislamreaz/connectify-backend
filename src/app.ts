@@ -12,6 +12,7 @@ import {
   isLikelyWrongZegoSecret,
   isZegoConfigured,
 } from "./config/zego";
+import { getMailHealth } from "./services/mail.service";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFoundHandler } from "./middleware/notFoundHandler";
 import {
@@ -48,10 +49,12 @@ app.use(
 
 app.get("/health", async (_req, res) => {
   const redisOk = isRedisEnabled() ? await cache.ping() : null;
+  const mail = getMailHealth();
   res.json({
     success: true,
     message: "Server is running",
     redis: isRedisEnabled() ? (redisOk ? "connected" : "error") : "disabled",
+    mail,
     zego: isZegoConfigured()
       ? {
           configured: true,
