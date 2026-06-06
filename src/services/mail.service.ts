@@ -93,8 +93,10 @@ async function processQueue(): Promise<void> {
         // Aligns the SMTP envelope sender with the From address (helps SPF/DMARC).
         envelope: { from: senderAddress, to: job.to },
         headers: {
-          // Signals a legitimate, manageable sender to Gmail/Outlook filters.
-          "List-Unsubscribe": `<mailto:${senderAddress}?subject=unsubscribe>`,
+          // Transactional mail — not bulk/marketing (List-Unsubscribe hurts deliverability here).
+          Precedence: "auto",
+          "Auto-Submitted": "auto-generated",
+          "X-Auto-Response-Suppress": "All",
           "X-Entity-Ref-ID": `connectify-${Date.now()}`,
         },
       });
@@ -124,6 +126,29 @@ export function queueMail(mail: MailInput): void {
   });
 }
 
+function deliverabilityWarnings(): void {
+  const from = senderEmail().toLowerCase();
+  const brand = env.MAIL_FROM_NAME?.trim();
+
+  if (/localhost|127\.0\.0\.1/i.test(env.FRONTEND_URL)) {
+    console.warn(
+      `[mail] FRONTEND_URL is "${env.FRONTEND_URL}" — reset links in emails will look suspicious; set FRONTEND_URL to your public app URL.`,
+    );
+  }
+
+  if (brand && /@(gmail|googlemail)\.com$/i.test(from)) {
+    console.warn(
+      `[mail] Sending as "${brand}" from a personal Gmail (${from}) often lands in spam. Use a custom domain (e.g. noreply@yourdomain.com) with SPF/DKIM/DMARC, or Google Workspace.`,
+    );
+  }
+
+  if (env.MAIL_FROM && mailUser() && env.MAIL_FROM.toLowerCase() !== mailUser().toLowerCase()) {
+    console.warn(
+      `[mail] MAIL_FROM (${env.MAIL_FROM}) differs from SMTP auth user (${mailUser()}) — SPF/DMARC alignment will fail.`,
+    );
+  }
+}
+
 /** Optional startup probe — logs whether outbound email is wired up. */
 export function logMailStartupStatus(): void {
   if (!isMailConfigured()) {
@@ -132,9 +157,10 @@ export function logMailStartupStatus(): void {
     );
     return;
   }
+  deliverabilityWarnings();
   const tx = getTransporter();
   tx?.verify()
-    .then(() => console.log(`[mail] SMTP ready via ${env.SMTP_HOST}`))
+    .then(() => console.log(`[mail] SMTP ready via ${env.SMTP_HOST} (from ${senderEmail()})`))
     .catch((err) =>
       console.error(
         "[mail] SMTP verify failed:",

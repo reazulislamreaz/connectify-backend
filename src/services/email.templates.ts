@@ -4,8 +4,7 @@
  * Deliverability notes (why these are kept simple):
  *  - Light, mostly-text HTML with one clear call-to-action lands in the inbox
  *    far more reliably than heavy "marketing" layouts.
- *  - No external images (so nothing is blocked, and there's no image-heavy ratio
- *    that filters dislike). The logo is a CSS monogram, not an <img>.
+ *  - No images, icons, or emoji — text-only for better deliverability.
  *  - Every email ships with a real plain-text alternative (set in mail.service).
  *  - Layout is table-based with inline styles for cross-client rendering.
  */
@@ -42,24 +41,10 @@ function layout(opts: {
     <tr>
       <td align="center" style="padding:24px 16px;">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;width:100%;">
-          <!-- Brand row -->
-          <tr>
-            <td style="padding:8px 4px 20px 4px;">
-              <table role="presentation" cellpadding="0" cellspacing="0">
-                <tr>
-                  <td style="vertical-align:middle;">
-                    <span style="display:inline-block;width:32px;height:32px;border-radius:8px;background:${BRAND};color:#ffffff;text-align:center;line-height:32px;font-size:16px;font-weight:700;">C</span>
-                  </td>
-                  <td style="vertical-align:middle;padding-left:10px;">
-                    <span style="font-size:17px;font-weight:700;color:${INK};">Connectify</span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
           <!-- Card -->
           <tr>
             <td style="border:1px solid ${BORDER};border-radius:12px;padding:32px 28px;">
+              <p style="margin:0 0 8px 0;font-size:13px;font-weight:600;color:${MUTED};text-transform:uppercase;letter-spacing:0.04em;">Connectify</p>
               <h1 style="margin:0 0 16px 0;font-size:20px;font-weight:700;color:${INK};">${opts.heading}</h1>
               ${opts.bodyHtml}
             </td>

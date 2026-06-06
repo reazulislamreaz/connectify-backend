@@ -67,6 +67,24 @@ const envSchema = z.object({
     .transform((v) => v !== "false" && v !== "0"),
 });
 
+/** Prefer explicit FRONTEND_URL; otherwise first non-localhost origin from CLIENT_URL. */
+function resolveFrontendUrl(
+  rawFrontend: string | undefined,
+  clientUrl: string,
+  fallback: string,
+): string {
+  const explicit = rawFrontend?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  const origins = clientUrl
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const production = origins.find(
+    (u) => !/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(u),
+  );
+  return (production || origins[0] || fallback).replace(/\/$/, "");
+}
+
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
@@ -74,4 +92,11 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const env = parsed.data;
+export const env = {
+  ...parsed.data,
+  FRONTEND_URL: resolveFrontendUrl(
+    process.env.FRONTEND_URL,
+    parsed.data.CLIENT_URL,
+    parsed.data.FRONTEND_URL,
+  ),
+};
