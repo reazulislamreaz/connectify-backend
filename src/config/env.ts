@@ -30,7 +30,15 @@ const envSchema = z.object({
   APP_USER_EMAIL: z.string().default(""),
   APP_PASSWORD: z.string().default(""),
   MAIL_FROM: z.string().default(""),
-  MAIL_FROM_NAME: z.string().default("Connectify"),
+  /** Display name in From header. Leave empty when using personal Gmail (reduces spam). */
+  MAIL_FROM_NAME: z.string().default(""),
+  /** smtp (default) or ses — SES uses AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY + verified MAIL_FROM. */
+  MAIL_PROVIDER: z.enum(["smtp", "ses"]).default("smtp"),
+  /** Force text-only emails (no HTML part). Defaults to true for @gmail.com SMTP senders. */
+  MAIL_PLAIN_ONLY: z
+    .string()
+    .optional()
+    .transform((v) => v === "true" || v === "1"),
   UPLOAD_DIR: z.string().default("uploads"),
   AWS_REGION: z.string().default("us-east-2"),
   AWS_ACCESS_KEY_ID: z.string().min(1),
