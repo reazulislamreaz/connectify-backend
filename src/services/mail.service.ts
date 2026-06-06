@@ -12,8 +12,22 @@ import { env } from "../config/env";
 
 let transporter: Transporter | null = null;
 
+/** Mail account credentials — APP_USER_EMAIL/APP_PASSWORD preferred, SMTP_* as fallback. */
+function mailUser(): string {
+  return env.APP_USER_EMAIL || env.SMTP_USER;
+}
+
+function mailPass(): string {
+  return env.APP_PASSWORD || env.SMTP_PASS;
+}
+
+/** The address shown in the From / envelope. */
+function senderEmail(): string {
+  return env.MAIL_FROM || mailUser();
+}
+
 export function isMailConfigured(): boolean {
-  return Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS);
+  return Boolean(env.SMTP_HOST && mailUser() && mailPass());
 }
 
 function getTransporter(): Transporter | null {
@@ -23,14 +37,14 @@ function getTransporter(): Transporter | null {
       host: env.SMTP_HOST,
       port: env.SMTP_PORT,
       secure: env.SMTP_SECURE, // true for 465, false for 587 (STARTTLS)
-      auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+      auth: { user: mailUser(), pass: mailPass() },
     });
   }
   return transporter;
 }
 
 function fromAddress(): string {
-  const address = env.MAIL_FROM || env.SMTP_USER;
+  const address = senderEmail();
   return env.MAIL_FROM_NAME ? `"${env.MAIL_FROM_NAME}" <${address}>` : address;
 }
 
@@ -68,12 +82,21 @@ async function processQueue(): Promise<void> {
     }
 
     try {
+      const senderAddress = senderEmail();
       await tx.sendMail({
         from: fromAddress(),
         to: job.to,
         subject: job.subject,
         html: job.html,
-        text: job.text,
+        text: job.text, // plain-text alternative improves inbox placement
+        replyTo: senderAddress,
+        // Aligns the SMTP envelope sender with the From address (helps SPF/DMARC).
+        envelope: { from: senderAddress, to: job.to },
+        headers: {
+          // Signals a legitimate, manageable sender to Gmail/Outlook filters.
+          "List-Unsubscribe": `<mailto:${senderAddress}?subject=unsubscribe>`,
+          "X-Entity-Ref-ID": `connectify-${Date.now()}`,
+        },
       });
       queue.shift();
     } catch (err) {

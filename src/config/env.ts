@@ -25,6 +25,10 @@ const envSchema = z.object({
     .transform((v) => v === "true" || v === "1"),
   SMTP_USER: z.string().default(""),
   SMTP_PASS: z.string().default(""),
+  // Preferred mail credentials (e.g. Google Workspace account + app password).
+  // Fall back to SMTP_USER/SMTP_PASS when not set.
+  APP_USER_EMAIL: z.string().default(""),
+  APP_PASSWORD: z.string().default(""),
   MAIL_FROM: z.string().default(""),
   MAIL_FROM_NAME: z.string().default("Connectify"),
   UPLOAD_DIR: z.string().default("uploads"),
