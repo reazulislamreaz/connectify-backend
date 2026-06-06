@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && cp src/utils/zegoServerAssistant.official.js dist/utils/",
     "start": "node dist/index.js",
     "zego:check": "node scripts/zego-check.mjs"
   },
