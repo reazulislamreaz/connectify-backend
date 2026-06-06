@@ -14,6 +14,8 @@ export interface IUser extends Document {
   dateOfBirth?: Date;
   isOnline: boolean;
   lastSeen: Date;
+  passwordResetToken?: string;
+  passwordResetExpires?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +40,8 @@ const userSchema = new Schema<IUser>(
     dateOfBirth: { type: Date },
     isOnline: { type: Boolean, default: false },
     lastSeen: { type: Date, default: Date.now },
+    passwordResetToken: { type: String, select: false },
+    passwordResetExpires: { type: Date, select: false },
   },
   { timestamps: true }
 );
@@ -45,5 +49,6 @@ const userSchema = new Schema<IUser>(
 userSchema.index({ name: 1 });
 userSchema.index({ isOnline: 1, lastSeen: -1 });
 userSchema.index({ name: "text", email: "text" });
+userSchema.index({ passwordResetToken: 1 });
 
 export const User = mongoose.model<IUser>("User", userSchema);

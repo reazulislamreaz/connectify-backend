@@ -13,6 +13,20 @@ const envSchema = z.object({
     .string()
     .min(1)
     .default("http://localhost:3000,http://127.0.0.1:3000"),
+  /** Public URL of the frontend — used to build links in emails (e.g. password reset). */
+  FRONTEND_URL: z.string().default("http://localhost:3000"),
+  // SMTP / email (used for password reset). When unset, emails are skipped (logged in dev).
+  SMTP_HOST: z.string().default(""),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_SECURE: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v === "true" || v === "1"),
+  SMTP_USER: z.string().default(""),
+  SMTP_PASS: z.string().default(""),
+  MAIL_FROM: z.string().default(""),
+  MAIL_FROM_NAME: z.string().default("Connectify"),
   UPLOAD_DIR: z.string().default("uploads"),
   AWS_REGION: z.string().default("us-east-2"),
   AWS_ACCESS_KEY_ID: z.string().min(1),

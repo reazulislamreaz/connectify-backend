@@ -29,3 +29,18 @@ export const changePasswordSchema = z
 export const deleteAccountSchema = z.object({
   password: z.string().min(1, "Password is required to delete your account"),
 });
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email().toLowerCase().trim(),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    token: z.string().min(1, "Reset token is required"),
+    password: z.string().min(6).max(128),
+    confirmPassword: z.string().min(1, "Please confirm your new password"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });

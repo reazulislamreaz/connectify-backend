@@ -8,11 +8,13 @@ import { allowedOrigins } from "./config/cors";
 import { setupSocket } from "./socket/socket.handler";
 import { attachSocketRedisAdapter, disconnectSocketRedis } from "./config/socketAdapter";
 import { logZegoStartupStatus } from "./config/zego";
+import { logMailStartupStatus } from "./services/mail.service";
 
 async function bootstrap() {
   await connectDatabase();
   await connectRedis();
   logZegoStartupStatus();
+  logMailStartupStatus();
 
   const server = http.createServer(app);
 

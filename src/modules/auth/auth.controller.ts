@@ -48,6 +48,18 @@ export class AuthController {
     res.json({ success: true, data: result });
   });
 
+  forgotPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { email } = req.body;
+    const result = await authService.requestPasswordReset(email);
+    res.json({ success: true, data: result });
+  });
+
+  resetPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { token, password } = req.body;
+    const result = await authService.resetPassword(token, password);
+    res.json({ success: true, data: result });
+  });
+
   deleteAccount = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { password } = req.body;
     const result = await authService.deleteAccount(req.user!.userId, password);

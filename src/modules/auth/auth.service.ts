@@ -1,8 +1,15 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import mongoose from "mongoose";
 import { User } from "./auth.model";
 import { signToken } from "../../utils/jwt";
 import { AppError } from "../../utils/AppError";
+import { env } from "../../config/env";
+import { queueMail } from "../../services/mail.service";
+import {
+  passwordResetEmail,
+  passwordChangedEmail,
+} from "../../services/email.templates";
 import { resolveImageUrl, deleteFromS3ByUrl } from "../../config/s3";
 import { USER_PROFILE_SELECT, USER_EXISTS_SELECT } from "../../constants/queryFields";
 import { Message } from "../message/message.model";
@@ -13,6 +20,12 @@ import { cacheInvalidate } from "../../cache/invalidate";
 import { keys, TTL } from "../../cache/keys";
 
 const SALT_ROUNDS = 12;
+const RESET_TOKEN_TTL_MINUTES = 60;
+const RESET_TOKEN_TTL_MS = RESET_TOKEN_TTL_MINUTES * 60 * 1000;
+
+function hashResetToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
 
 export class AuthService {
   async register(name: string, email: string, password: string) {
@@ -75,6 +88,87 @@ export class AuthService {
     await cacheInvalidate.authMe(userId);
 
     return { message: "Password changed successfully" };
+  }
+
+  /**
+   * Start the password-reset flow. Always resolves with the same generic message
+   * (even for unknown emails) to avoid leaking which addresses are registered.
+   * The email is sent in the background — this never blocks on SMTP.
+   */
+  async requestPasswordReset(email: string) {
+    const genericResponse = {
+      message:
+        "If an account exists for that email, we've sent a password reset link.",
+    };
+
+    const user = await User.findOne({ email }).select("name email").lean();
+    if (!user) {
+      return genericResponse;
+    }
+
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    await User.findByIdAndUpdate(user._id, {
+      passwordResetToken: hashResetToken(rawToken),
+      passwordResetExpires: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+    });
+
+    const base = env.FRONTEND_URL.replace(/\/$/, "");
+    const resetUrl = `${base}/reset-password?token=${rawToken}`;
+
+    const mail = passwordResetEmail({
+      name: user.name,
+      resetUrl,
+      expiresMinutes: RESET_TOKEN_TTL_MINUTES,
+    });
+    queueMail({
+      to: user.email,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+
+    if (env.NODE_ENV !== "production") {
+      console.log(`[auth] password reset link for ${user.email}: ${resetUrl}`);
+    }
+
+    return genericResponse;
+  }
+
+  /** Complete the reset using the token from the emailed link. */
+  async resetPassword(token: string, newPassword: string) {
+    const user = await User.findOne({
+      passwordResetToken: hashResetToken(token),
+      passwordResetExpires: { $gt: new Date() },
+    })
+      .select("name email")
+      .lean();
+
+    if (!user) {
+      throw new AppError(
+        400,
+        "This password reset link is invalid or has expired. Please request a new one."
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await User.findByIdAndUpdate(user._id, {
+      password: hashedPassword,
+      $unset: { passwordResetToken: "", passwordResetExpires: "" },
+    });
+    await cacheInvalidate.authMe(user._id.toString());
+
+    const mail = passwordChangedEmail({ name: user.name });
+    queueMail({
+      to: user.email,
+      subject: mail.subject,
+      html: mail.html,
+      text: mail.text,
+    });
+
+    return {
+      message:
+        "Your password has been reset successfully. You can now sign in with your new password.",
+    };
   }
 
   async deleteAccount(userId: string, password: string) {

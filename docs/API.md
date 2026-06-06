@@ -113,6 +113,45 @@ Auth routes use a stricter rate limit (see README). Register/login set an HTTP-o
 
 ---
 
+### `POST /api/auth/forgot-password`
+
+Starts the password-reset flow. Always returns the same generic message (even for unknown emails) to avoid leaking which addresses are registered. If the email exists, a reset link is emailed **in the background** (non-blocking). The link is valid for **60 minutes**, single-use.
+
+**Body (JSON)**
+
+| Field | Type |
+|-------|------|
+| `email` | string |
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": { "message": "If an account exists for that email, we've sent a password reset link." }
+}
+```
+
+---
+
+### `POST /api/auth/reset-password`
+
+Completes the reset using the token from the emailed link (`FRONTEND_URL/reset-password?token=...`). On success, sends a confirmation email in the background.
+
+**Body (JSON)**
+
+| Field | Type |
+|-------|------|
+| `token` | string (from the email link) |
+| `password` | string (6–128) |
+| `confirmPassword` | string (must match `password`) |
+
+**Response `200`** — `{ success, data: { message } }`
+
+**Errors:** `400` link invalid or expired
+
+---
+
 ### `POST /api/auth/logout`
 
 Clears the `token` cookie.
