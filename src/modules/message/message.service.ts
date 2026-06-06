@@ -13,7 +13,11 @@ import { cache } from "../../cache/cache.service";
 import { cacheInvalidate } from "../../cache/invalidate";
 import { keys, TTL } from "../../cache/keys";
 import { MAX_VOICE_DURATION_SECONDS } from "../../constants/limits";
-import type { CallLogStatus } from "../../constants/call";
+import {
+  DEFAULT_CALL_TYPE,
+  type CallLogStatus,
+  type CallType,
+} from "../../constants/call";
 import { emitReceiveMessage } from "../../socket/message.events";
 
 type MessageDoc = {
@@ -26,6 +30,7 @@ type MessageDoc = {
   voiceUrl?: string;
   voiceDuration?: number;
   callStatus?: CallLogStatus;
+  callType?: CallType;
   callDuration?: number;
   read: boolean;
   isDeleted?: boolean;
@@ -81,6 +86,7 @@ function formatMessage(
         : undefined,
     voiceDuration: isDeleted ? undefined : message.voiceDuration || undefined,
     callStatus: isCall && !isDeleted ? message.callStatus : undefined,
+    callType: isCall ? message.callType ?? DEFAULT_CALL_TYPE : undefined,
     callDuration: isCall && !isDeleted ? message.callDuration ?? 0 : undefined,
     read: message.read,
     isDeleted,
@@ -516,6 +522,7 @@ export class MessageService {
     calleeId: string,
     callStatus: CallLogStatus,
     durationSeconds = 0,
+    callType: CallType = DEFAULT_CALL_TYPE,
   ): Promise<MessagePayload> {
     const areFriends = await friendRequestService.areFriends(callerId, calleeId);
     if (!areFriends) {
@@ -528,6 +535,7 @@ export class MessageService {
       messageType: "call",
       content: "",
       callStatus,
+      callType,
       callDuration: Math.max(0, Math.round(durationSeconds)),
       read: true,
     });

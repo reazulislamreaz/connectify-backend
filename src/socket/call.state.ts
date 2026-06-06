@@ -1,3 +1,5 @@
+import type { CallType } from "../constants/call";
+
 export type CallStatus = "ringing" | "active" | "ended";
 
 export interface CallSession {
@@ -6,6 +8,7 @@ export interface CallSession {
   callerId: string;
   calleeId: string;
   callerName: string;
+  callType: CallType;
   status: CallStatus;
   createdAt: number;
   answeredAt?: number;

@@ -3,7 +3,12 @@ import { User } from "../modules/auth/auth.model";
 import { AppError } from "../utils/AppError";
 import { callService } from "../modules/call/call.service";
 import { messageService } from "../modules/message/message.service";
-import type { CallLogStatus } from "../constants/call";
+import {
+  CALL_TYPE,
+  DEFAULT_CALL_TYPE,
+  type CallLogStatus,
+  type CallType,
+} from "../constants/call";
 import { createEventRateLimiter } from "./rateLimit";
 import {
   endCall,
@@ -30,6 +35,12 @@ export function clearCallDisconnectGrace(userId: string): void {
     clearTimeout(timer);
     disconnectGraceTimers.delete(userId);
   }
+}
+
+function normalizeCallType(value: unknown): CallType {
+  return CALL_TYPE.includes(value as CallType)
+    ? (value as CallType)
+    : DEFAULT_CALL_TYPE;
 }
 
 function clearRingTimeout(callId: string): void {
@@ -89,6 +100,7 @@ async function finalizeCall(
       call.calleeId,
       status,
       durationSeconds,
+      call.callType,
     );
   } catch (err) {
     console.error("call log error:", err);
@@ -118,7 +130,7 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
   const userId = socket.userId!;
   const limitCall = createEventRateLimiter(20, 60_000);
 
-  socket.on("call:invite", async (data: { calleeId: string }, callback) => {
+  socket.on("call:invite", async (data: { calleeId: string; callType?: CallType }, callback) => {
     if (!limitCall()) {
       callback?.({ success: false, message: "Rate limit exceeded" });
       return;
@@ -130,6 +142,8 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
         callback?.({ success: false, message: "calleeId is required" });
         return;
       }
+
+      const callType = normalizeCallType(data?.callType);
 
       if (getUserActiveCallId(userId)) {
         callback?.({ success: false, message: "You are already in a call" });
@@ -159,6 +173,7 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
         callerId: userId,
         calleeId,
         callerName: caller?.name ?? "Someone",
+        callType,
         status: "ringing",
         createdAt: Date.now(),
       });
@@ -168,13 +183,14 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
         roomId,
         callerId: userId,
         callerName: caller?.name ?? "Someone",
+        callType,
       });
 
       scheduleRingTimeout(io, callId);
 
       callback?.({
         success: true,
-        data: { callId, roomId, calleeId },
+        data: { callId, roomId, calleeId, callType },
       });
     } catch (err) {
       const message =
@@ -202,11 +218,16 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
     io.to(`user:${call.callerId}`).emit("call:accepted", {
       callId: call.callId,
       roomId: call.roomId,
+      callType: call.callType,
     });
 
     callback?.({
       success: true,
-      data: { callId: call.callId, roomId: call.roomId },
+      data: {
+        callId: call.callId,
+        roomId: call.roomId,
+        callType: call.callType,
+      },
     });
   });
 

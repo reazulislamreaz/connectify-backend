@@ -373,9 +373,11 @@ All routes require authentication. Real-time delivery also emits Socket.IO event
 }
 ```
 
-`messageType`: `"text"` | `"call"` (call logs include `callStatus`, `callDuration`)
+`messageType`: `"text"` | `"call"` (call logs include `callStatus`, `callDuration`, `callType`)
 
 `callStatus`: `"completed"` | `"rejected"` | `"cancelled"` | `"missed"` | `"busy"` | `"disconnected"`
+
+`callType`: `"audio"` | `"video"` (present on call logs; older logs without the field are treated as `"audio"`)
 
 ---
 
@@ -660,7 +662,7 @@ On connect, the server joins the socket to room `user:{userId}`.
 | `send_message` | `{ receiverId, content, replyToId? }` | `{ success, data?, message? }` | 60/min |
 | `message_read` | `{ senderId }` | — | 120/min |
 | `typing` | `{ receiverId, isTyping }` | — | 120/min |
-| `call:invite` | `{ calleeId }` | `{ success, data?, message? }` | 20/min |
+| `call:invite` | `{ calleeId, callType? }` | `{ success, data?, message? }` | 20/min |
 | `call:accept` | `{ callId }` | `{ success, data?, message? }` | — |
 | `call:reject` | `{ callId }` | — | — |
 | `call:cancel` | `{ callId }` | — | — |
@@ -679,16 +681,18 @@ On connect, the server joins the socket to room `user:{userId}`.
 | `typing` | `{ userId, isTyping }` | Typing indicator |
 | `user_presence` | `{ userId, isOnline, lastSeen? }` | Friend online/offline |
 | `conversation_deleted` | `{ otherUserId }` | Thread removed |
-| `call:incoming` | `{ callId, roomId, callerId, callerName }` | Incoming call |
-| `call:accepted` | `{ callId, roomId }` | Callee accepted |
+| `call:incoming` | `{ callId, roomId, callerId, callerName, callType }` | Incoming call |
+| `call:accepted` | `{ callId, roomId, callType }` | Callee accepted |
 | `call:ended` | `{ callId, reason, duration }` | Call finished |
+
+**Call types** — `callType` is `"audio"` or `"video"` (defaults to `"audio"` when omitted, so existing clients keep working). The same room/token serves both; the value tells the client whether to publish a camera stream. Call-log messages persist `callType`, so chat history shows whether a call was audio or video.
 
 **Call flow (simplified)**
 
-1. Caller emits `call:invite` → callee receives `call:incoming`
-2. Callee emits `call:accept` → both receive `call:accepted` with `roomId`
-3. Both call `POST /api/calls/token` with `roomId` and join ZEGOCLOUD
-4. Either party emits `call:end` or disconnects → `call:ended` + call log message in chat
+1. Caller emits `call:invite` (with `callType`) → callee receives `call:incoming` carrying that `callType`
+2. Callee emits `call:accept` → both receive `call:accepted` with `roomId` and `callType`
+3. Both call `POST /api/calls/token` with `roomId` and join ZEGOCLOUD (publish camera + mic for video, mic only for audio)
+4. Either party emits `call:end` or disconnects → `call:ended` + call log message in chat (tagged with `callType`)
 
 Ring timeout: **45 seconds** (missed call). Disconnect grace during active call: **15 seconds**.
 
