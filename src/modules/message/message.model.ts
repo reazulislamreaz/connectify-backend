@@ -57,5 +57,10 @@ messageSchema.index({ senderId: 1, receiverId: 1, createdAt: -1 });
 messageSchema.index({ receiverId: 1, senderId: 1, read: 1 });
 messageSchema.index({ receiverId: 1, read: 1, createdAt: -1 });
 messageSchema.index({ senderId: 1, receiverId: 1, read: 1 });
+// Delivery (single-tick) query paths:
+//  - markDelivered:    updateMany({ senderId, receiverId, delivered: false })
+//  - markAllDelivered: distinct("senderId", { receiverId, delivered: false })
+messageSchema.index({ senderId: 1, receiverId: 1, delivered: 1 });
+messageSchema.index({ receiverId: 1, delivered: 1, senderId: 1 });
 
 export const Message = mongoose.model<IMessage>("Message", messageSchema);

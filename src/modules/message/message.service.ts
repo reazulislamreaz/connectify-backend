@@ -543,9 +543,11 @@ export class MessageService {
     );
 
     const senderIds = senders.map((s) => s.toString());
-    for (const senderId of senderIds) {
-      await cacheInvalidate.messages(receiverId, senderId);
-    }
+    await Promise.all(
+      senderIds.map((senderId) =>
+        cacheInvalidate.messages(receiverId, senderId),
+      ),
+    );
 
     return { senderIds };
   }
