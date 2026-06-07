@@ -15,6 +15,12 @@ function sortedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
+// Bump when the cached user / auth-me shape changes, so entries written by an
+// older deploy are bypassed instead of served stale. v2 added `role` + `status`
+// — without it, /auth/me returns a pre-role payload after reload and the admin
+// nav disappears even for admins (login bypasses the cache, so it worked there).
+const USER_CACHE_VERSION = "v2";
+
 export const keys = {
   chatList: (userId: string) => `chatlist:${userId}`,
   friends: (userId: string) => `friends:${userId}`,
@@ -26,8 +32,8 @@ export const keys = {
     `relation:${currentUserId}:${otherUserId}`,
   friendReqReceived: (userId: string) => `friendreq:received:${userId}`,
   friendReqSent: (userId: string) => `friendreq:sent:${userId}`,
-  authMe: (userId: string) => `auth:me:${userId}`,
-  user: (userId: string) => `user:${userId}`,
+  authMe: (userId: string) => `auth:me:${USER_CACHE_VERSION}:${userId}`,
+  user: (userId: string) => `user:${USER_CACHE_VERSION}:${userId}`,
   messages: (a: string, b: string, page: number) => {
     const [x, y] = sortedPair(a, b);
     return `messages:${x}:${y}:p${page}`;
