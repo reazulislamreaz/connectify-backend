@@ -39,7 +39,11 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
     const user = await User.create({ name, email, password: hashedPassword });
 
-    const token = signToken({ userId: user._id.toString(), email: user.email });
+    const token = signToken({
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role ?? "user",
+    });
 
     return {
       token,
@@ -67,7 +71,11 @@ export class AuthService {
       throw new AppError(403, "This account is suspended. Contact support.");
     }
 
-    const token = signToken({ userId: user._id.toString(), email: user.email });
+    const token = signToken({
+      userId: user._id.toString(),
+      email: user.email,
+      role: user.role ?? "user",
+    });
 
     return {
       token,

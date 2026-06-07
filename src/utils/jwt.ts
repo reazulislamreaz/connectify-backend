@@ -1,9 +1,12 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
+import type { UserRole } from "../modules/auth/auth.model";
 
 export interface JwtPayload {
   userId: string;
   email: string;
+  /** UI hint only — server authorization still re-checks the DB in requireRole. */
+  role?: UserRole;
 }
 
 export function signToken(payload: JwtPayload): string {
