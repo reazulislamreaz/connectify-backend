@@ -1,5 +1,6 @@
 import { Server, Socket } from "socket.io";
 import { verifyToken } from "../utils/jwt";
+import { User } from "../modules/auth/auth.model";
 import { messageService } from "../modules/message/message.service";
 import { presenceService } from "../services/presence.service";
 import { broadcastPresenceToFriends } from "../services/presence.broadcast";
@@ -14,7 +15,7 @@ interface AuthenticatedSocket extends Socket {
 export function setupSocket(io: Server): void {
   setSocketServer(io);
 
-  io.use((socket: AuthenticatedSocket, next) => {
+  io.use(async (socket: AuthenticatedSocket, next) => {
     const token =
       socket.handshake.auth?.token ||
       socket.handshake.headers?.authorization?.toString().replace("Bearer ", "");
@@ -24,12 +25,37 @@ export function setupSocket(io: Server): void {
       return;
     }
 
+    let payload: ReturnType<typeof verifyToken>;
     try {
-      const payload = verifyToken(token);
+      payload = verifyToken(token);
+    } catch {
+      next(new Error("Invalid token"));
+      return;
+    }
+
+    try {
+      // Banned/suspended users may not open a realtime connection.
+      const account = await User.findById(payload.userId)
+        .select("status suspendedUntil")
+        .lean();
+
+      if (!account) {
+        next(new Error("Account no longer exists"));
+        return;
+      }
+      const suspended =
+        account.status === "suspended" &&
+        (!account.suspendedUntil ||
+          new Date(account.suspendedUntil) > new Date());
+      if (account.status === "banned" || suspended) {
+        next(new Error("Account is not active"));
+        return;
+      }
+
       socket.userId = payload.userId;
       next();
     } catch {
-      next(new Error("Invalid token"));
+      next(new Error("Authentication failed"));
     }
   });
 
@@ -42,7 +68,11 @@ export function setupSocket(io: Server): void {
     const limitTyping = createEventRateLimiter(120, 60_000);
     const limitRead = createEventRateLimiter(120, 60_000);
 
-    await presenceService.markOnline(userId);
+    try {
+      await presenceService.markOnline(userId);
+    } catch (err) {
+      console.error("markOnline error:", err);
+    }
     void broadcastPresenceToFriends(io, userId, true);
 
     // Deliver anything that arrived while this user was offline, and tell senders.
@@ -139,9 +169,13 @@ export function setupSocket(io: Server): void {
 
     socket.on("disconnect", async () => {
       clearInterval(presenceHeartbeat);
-      const lastSeen = new Date();
-      await presenceService.markOffline(userId);
-      void broadcastPresenceToFriends(io, userId, false, lastSeen);
+      try {
+        const lastSeen = new Date();
+        await presenceService.markOffline(userId);
+        void broadcastPresenceToFriends(io, userId, false, lastSeen);
+      } catch (err) {
+        console.error("markOffline error:", err);
+      }
     });
   });
 }

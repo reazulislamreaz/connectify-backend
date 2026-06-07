@@ -13,7 +13,11 @@ export interface AuthRequest extends Request {
   };
 }
 
-export function authenticate(req: AuthRequest, _res: Response, next: NextFunction): void {
+export async function authenticate(
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+): Promise<void> {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : req.cookies?.token;
 
@@ -22,12 +26,41 @@ export function authenticate(req: AuthRequest, _res: Response, next: NextFunctio
     return;
   }
 
+  let payload: ReturnType<typeof verifyToken>;
   try {
-    const payload = verifyToken(token);
-    req.user = payload;
-    next();
+    payload = verifyToken(token);
   } catch {
     next(new AppError(401, "Invalid or expired token"));
+    return;
+  }
+
+  try {
+    // Block banned/suspended accounts even if their JWT is still valid. One
+    // indexed lookup by _id — cheap next to the route's own queries.
+    const account = await User.findById(payload.userId)
+      .select("status suspendedUntil")
+      .lean();
+
+    if (!account) {
+      next(new AppError(401, "Account no longer exists"));
+      return;
+    }
+    if (account.status === "banned") {
+      next(new AppError(403, "This account has been banned."));
+      return;
+    }
+    if (
+      account.status === "suspended" &&
+      (!account.suspendedUntil || new Date(account.suspendedUntil) > new Date())
+    ) {
+      next(new AppError(403, "This account is suspended."));
+      return;
+    }
+
+    req.user = payload;
+    next();
+  } catch (err) {
+    next(err);
   }
 }
 

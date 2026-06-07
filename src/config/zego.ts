@@ -54,9 +54,15 @@ export function logZegoStartupStatus(): void {
     return;
   }
   if (isLikelyWrongZegoSecret()) {
-    console.warn(
-      "[zego] ZEGOCLOUD_SERVER_SECRET matches the start of ZEGOCLOUD_APP_SIGN — use Server Secret only",
-    );
+    const msg =
+      "[zego] ZEGOCLOUD_SERVER_SECRET matches the start of ZEGOCLOUD_APP_SIGN — use the Server Secret from the console, not the App Sign";
+    // In production this misconfig makes every call fail with a cryptic auth
+    // error, so fail fast instead of starting in a broken state.
+    if (env.NODE_ENV === "production") {
+      console.error(`${msg} — refusing to start.`);
+      process.exit(1);
+    }
+    console.warn(msg);
   }
   console.log(
     `[zego] Voice calls enabled (appId=${appId}, secretFingerprint=${getZegoSecretFingerprint()})`,

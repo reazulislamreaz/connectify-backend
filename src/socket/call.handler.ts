@@ -11,6 +11,7 @@ import {
   type CallType,
 } from "../constants/call";
 import { createEventRateLimiter } from "./rateLimit";
+import { presenceService } from "../services/presence.service";
 import {
   endCall,
   getCall,
@@ -87,13 +88,15 @@ async function finalizeCall(
   callId: string,
   reason: string,
 ): Promise<void> {
-  const call = getCall(callId);
+  // Atomically claim the call — only the first finalizer proceeds, so we never
+  // write two call-logs or emit "ended" twice (e.g. a fired ring timeout racing
+  // a reject from another worker).
+  const call = await endCall(callId);
   if (!call) return;
 
   clearRingTimeout(callId);
 
   const { status, durationSeconds } = mapEndReasonToLogStatus(call, reason);
-  endCall(callId);
 
   try {
     await messageService.createCallLogMessage(
@@ -122,7 +125,20 @@ async function finalizeCall(
 function scheduleRingTimeout(io: Server, callId: string): void {
   clearRingTimeout(callId);
   const timeout = setTimeout(() => {
-    void finalizeCall(io, callId, "timeout");
+    ringTimeouts.delete(callId);
+    // The accept may have happened on another worker (which can't clear this
+    // local timer), so re-check shared state and only time out a call that's
+    // genuinely still ringing.
+    void (async () => {
+      try {
+        const call = await getCall(callId);
+        if (call?.status === "ringing") {
+          await finalizeCall(io, callId, "timeout");
+        }
+      } catch (err) {
+        console.error("ring timeout error:", err);
+      }
+    })();
   }, CALL_RING_TIMEOUT_MS);
   ringTimeouts.set(callId, timeout);
 }
@@ -146,14 +162,14 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
 
       const callType = normalizeCallType(data?.callType);
 
-      if (getUserActiveCallId(userId)) {
+      if (await getUserActiveCallId(userId)) {
         callback?.({ success: false, message: "You are already in a call" });
         return;
       }
 
       await callService.assertCanCall(userId, calleeId);
 
-      if (getUserActiveCallId(calleeId)) {
+      if (await getUserActiveCallId(calleeId)) {
         callback?.({ success: false, message: "User is busy" });
         return;
       }
@@ -171,7 +187,7 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
       const callId = callService.createCallId();
       const roomId = callService.createRoomId(userId, calleeId);
 
-      registerCall({
+      await registerCall({
         callId,
         roomId,
         callerId: userId,
@@ -206,8 +222,8 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
     }
   });
 
-  socket.on("call:accept", (data: { callId: string }, callback) => {
-    const call = getCall(data?.callId);
+  socket.on("call:accept", async (data: { callId: string }, callback) => {
+    const call = await getCall(data?.callId);
     if (!call || call.calleeId !== userId) {
       callback?.({ success: false, message: "Call not found" });
       return;
@@ -218,7 +234,13 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
     }
 
     clearRingTimeout(call.callId);
-    setCallStatus(call.callId, "active");
+    // If a ring-timeout/cancel ended the call concurrently, setCallStatus
+    // returns undefined — don't tell the caller it connected.
+    const active = await setCallStatus(call.callId, "active");
+    if (!active) {
+      callback?.({ success: false, message: "Call is no longer available" });
+      return;
+    }
 
     io.to(`user:${call.callerId}`).emit("call:accepted", {
       callId: call.callId,
@@ -236,20 +258,20 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
     });
   });
 
-  socket.on("call:reject", (data: { callId: string }) => {
-    const call = getCall(data?.callId);
+  socket.on("call:reject", async (data: { callId: string }) => {
+    const call = await getCall(data?.callId);
     if (!call || call.calleeId !== userId || call.status !== "ringing") return;
     void finalizeCall(io, call.callId, "rejected");
   });
 
-  socket.on("call:cancel", (data: { callId: string }) => {
-    const call = getCall(data?.callId);
+  socket.on("call:cancel", async (data: { callId: string }) => {
+    const call = await getCall(data?.callId);
     if (!call || call.callerId !== userId || call.status !== "ringing") return;
     void finalizeCall(io, call.callId, "cancelled");
   });
 
-  socket.on("call:end", (data: { callId: string }) => {
-    const call = getCall(data?.callId);
+  socket.on("call:end", async (data: { callId: string }) => {
+    const call = await getCall(data?.callId);
     if (!call) return;
     if (call.callerId !== userId && call.calleeId !== userId) return;
 
@@ -257,13 +279,13 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
     void finalizeCall(io, call.callId, reason);
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnect", async () => {
     clearCallDisconnectGrace(userId);
 
-    const activeCallId = getUserActiveCallId(userId);
+    const activeCallId = await getUserActiveCallId(userId);
     if (!activeCallId) return;
 
-    const call = getCall(activeCallId);
+    const call = await getCall(activeCallId);
     if (!call) return;
 
     if (call.status === "ringing") {
@@ -275,9 +297,19 @@ export function setupCallHandlers(io: Server, socket: AuthenticatedSocket): void
     if (call.status === "active") {
       const graceTimer = setTimeout(() => {
         disconnectGraceTimers.delete(userId);
-        const current = getCall(activeCallId);
-        if (!current || current.status !== "active") return;
-        void finalizeCall(io, activeCallId, "disconnected");
+        void (async () => {
+          try {
+            // A reconnect can land on a different worker, so the local grace
+            // clear never runs there. Trust shared presence: if they're back
+            // online anywhere in the cluster, keep the call alive.
+            if (await presenceService.isOnline(userId)) return;
+            const current = await getCall(activeCallId);
+            if (!current || current.status !== "active") return;
+            await finalizeCall(io, activeCallId, "disconnected");
+          } catch (err) {
+            console.error("disconnect grace error:", err);
+          }
+        })();
       }, CALL_DISCONNECT_GRACE_MS);
       disconnectGraceTimers.set(userId, graceTimer);
     }

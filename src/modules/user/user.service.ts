@@ -109,10 +109,10 @@ export class UserService {
     };
 
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-      ];
+      // Escape regex metacharacters so user input can't cause ReDoS or match
+      // unintended patterns.
+      const rx = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ name: rx }, { email: rx }];
     }
 
     const skip = (page - 1) * limit;

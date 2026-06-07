@@ -41,9 +41,23 @@ export function getSocketServer(): Server | null {
   return io;
 }
 
-/** Count of live socket connections (used by the admin health endpoint). */
+/** Live socket connections on THIS worker only. */
 export function getConnectionCount(): number {
   return io ? io.engine.clientsCount : 0;
+}
+
+/**
+ * Live socket connections across the whole cluster (via the Redis adapter).
+ * Falls back to this worker's local count if the adapter call fails.
+ */
+export async function getClusterConnectionCount(): Promise<number> {
+  if (!io) return 0;
+  try {
+    const ids = await io.of("/").adapter.sockets(new Set());
+    return ids.size;
+  } catch {
+    return io.engine.clientsCount;
+  }
 }
 
 /**

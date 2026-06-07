@@ -34,14 +34,38 @@ async function bootstrap() {
     console.log(`Server running on port ${env.PORT}`);
   });
 
-  const shutdown = async () => {
+}
+
+let shuttingDown = false;
+async function shutdown(code = 0): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try {
     await disconnectSocketRedis();
     await disconnectRedis();
-    process.exit(0);
-  };
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  } catch (err) {
+    console.error("Error during shutdown:", err);
+  } finally {
+    process.exit(code);
+  }
 }
+
+process.on("SIGINT", () => void shutdown(0));
+process.on("SIGTERM", () => void shutdown(0));
+
+// A stray rejection (e.g. a throw inside an async socket handler) is logged,
+// never fatal — one bad event must not take down the whole worker. Without this,
+// Node 20 terminates the process on any unhandled rejection.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+
+// An unexpected synchronous throw means state may be corrupt — exit cleanly and
+// let PM2 restart a fresh worker rather than continue in an unknown state.
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  void shutdown(1);
+});
 
 bootstrap().catch((err) => {
   console.error("Failed to start server:", err);

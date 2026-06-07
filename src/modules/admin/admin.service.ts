@@ -7,7 +7,10 @@ import { AppError } from "../../utils/AppError";
 import { resolveImageUrl, deleteFromS3ByUrl } from "../../config/s3";
 import { ADMIN_USER_SELECT } from "../../constants/queryFields";
 import { cacheInvalidate } from "../../cache/invalidate";
-import { disconnectUser, getConnectionCount } from "../../socket/message.events";
+import {
+  disconnectUser,
+  getClusterConnectionCount,
+} from "../../socket/message.events";
 import type {
   UpdateUserInput,
   ResolveReportInput,
@@ -545,9 +548,12 @@ export class AdminService {
 
   /* ───────────────────────────── health ───────────────────────────── */
   async getHealth() {
-    const presenceCount = await User.countDocuments({ isOnline: true });
+    const [presenceCount, socketConnections] = await Promise.all([
+      User.countDocuments({ isOnline: true }),
+      getClusterConnectionCount(),
+    ]);
     return {
-      socketConnections: getConnectionCount(),
+      socketConnections,
       apiOk: true,
       dbOk: mongoose.connection.readyState === 1,
       uptimeSeconds: Math.round(process.uptime()),
