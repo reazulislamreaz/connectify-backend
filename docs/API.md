@@ -41,6 +41,15 @@ Protected routes accept either:
 - Header: `Authorization: Bearer <jwt>`
 - Cookie: `token` (HTTP-only, set on register/login)
 
+### Roles & authorization
+
+Each user has a `role` (`user` | `moderator` | `admin`) and a `status` (`active` | `suspended` | `banned`). The JWT carries the `role` as a convenience claim so the client can render staff UI, but it is **not** the security boundary.
+
+- `/api/admin/*` requires **staff** (`moderator` or `admin`).
+- A few destructive admin actions (role changes, hard post delete) require **`admin`**.
+- The server re-reads `role` and `status` from the database on every staff request (`requireRole`), so a demotion, suspension, or ban takes effect immediately — even with an unexpired token.
+- A `suspended` or `banned` account is rejected at login (`403`) and has its live sockets disconnected when the status is applied.
+
 ---
 
 ## Health
@@ -88,11 +97,16 @@ Auth routes use a stricter rate limit (see README). Register/login set an HTTP-o
       "id": "<objectId>",
       "name": "Jane Doe",
       "email": "jane@example.com",
-      "profilePicture": "https://..."
+      "profilePicture": "https://...",
+      "role": "user",
+      "status": "active"
     }
   }
 }
 ```
+
+`role`: `"user"` | `"moderator"` | `"admin"` (set server-side only — never from registration input).
+`status`: `"active"` | `"suspended"` | `"banned"`.
 
 **Errors:** `409` email already registered
 
@@ -181,6 +195,8 @@ Clears the `token` cookie.
     "name": "Jane Doe",
     "email": "jane@example.com",
     "profilePicture": "https://...",
+    "role": "user",
+    "status": "active",
     "address": "",
     "professional": "",
     "religious": "",
@@ -192,6 +208,8 @@ Clears the `token` cookie.
   }
 }
 ```
+
+`role` / `status` let the client decide whether to show staff UI (e.g. the admin dashboard). They are a **UI hint only** — every `/api/admin/*` route re-checks role and status against the database on each request.
 
 ---
 
@@ -681,6 +699,253 @@ Mint a short-lived RTC token for a room.
 
 ---
 
+## Admin — `/api/admin`
+
+Staff-only moderation and analytics. **Every route requires `authenticate` + staff role** (`moderator` or `admin`); routes noted as **admin-only** additionally require the `admin` role. Role/status are re-checked against the database on each request.
+
+This surface is **privacy-safe by design**: it exposes aggregate counts and metadata, lets staff moderate **public** content (posts/comments/profiles), and acts on private content **only via the reports queue** — message **bodies are never returned**.
+
+### `GET /api/admin/stats`
+
+Dashboard metrics (last-14-day series included).
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "users": { "total": 0, "active": 0, "suspended": 0, "banned": 0, "onlineNow": 0, "newToday": 0, "newThisWeek": 0 },
+    "content": { "postsTotal": 0, "postsToday": 0, "commentsToday": 0 },
+    "messaging": { "messagesToday": 0, "callsToday": 0 },
+    "reports": { "open": 0, "resolvedToday": 0 },
+    "series": {
+      "signups": [{ "date": "2026-05-24", "count": 0 }],
+      "messages": [{ "date": "2026-05-24", "count": 0 }]
+    }
+  }
+}
+```
+
+---
+
+### `GET /api/admin/health`
+
+Live system health.
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": { "socketConnections": 0, "apiOk": true, "dbOk": true, "uptimeSeconds": 0, "presenceCount": 0 }
+}
+```
+
+---
+
+### `GET /api/admin/users`
+
+Paginated user list with moderation counters.
+
+**Query**
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `search` | string | — | Matches name or email |
+| `status` | string | `all` | `all` \| `active` \| `suspended` \| `banned` |
+| `role` | string | `all` | `all` \| `user` \| `moderator` \| `admin` |
+| `page` | number | 1 | |
+| `limit` | number | 12 | max 100 |
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "users": [
+      {
+        "id": "<objectId>",
+        "name": "Jane",
+        "email": "jane@example.com",
+        "profilePicture": "https://...",
+        "role": "user",
+        "status": "active",
+        "isOnline": false,
+        "lastSeen": "2026-05-24T12:00:00.000Z",
+        "createdAt": "2026-05-24T12:00:00.000Z",
+        "postsCount": 0,
+        "reportsAgainst": 0
+      }
+    ],
+    "pagination": { "page": 1, "limit": 12, "total": 0, "totalPages": 1 }
+  }
+}
+```
+
+---
+
+### `PATCH /api/admin/users/:id`
+
+Update a user's `status` and/or `role`. Suspending or banning disconnects the user's live sockets and busts their cache immediately.
+
+**Body (JSON)** — at least one of `status` / `role` is required.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `status` | string | `active` \| `suspended` \| `banned` |
+| `role` | string | `user` \| `moderator` \| `admin` — **admin-only** |
+| `suspendedUntil` | string | ISO date; applied when `status` is `suspended` |
+
+**Response `200`** — `{ success, data: { id, role, status } }`
+
+**Errors:** `400` updating own status to non-active · `403` non-admin changing roles or acting on another admin · `404` user not found
+
+---
+
+### `POST /api/admin/users/:id/force-logout`
+
+Disconnect a user's live sockets and mark them offline (does not change their role/status).
+
+**Response `200`** — `{ success, data: { success: true } }`
+
+---
+
+### `GET /api/admin/posts`
+
+Paginated posts with report counts (for moderation).
+
+**Query:** `search`, `reportedOnly` (`true`/`false`, default `false`), `page` (1), `limit` (12, max 100)
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "posts": [
+      {
+        "id": "<objectId>",
+        "content": "Post text",
+        "imageUrl": "https://...",
+        "author": { "id": "<objectId>", "name": "Jane", "profilePicture": "https://..." },
+        "likesCount": 0,
+        "commentsCount": 0,
+        "reportsCount": 0,
+        "hidden": false,
+        "createdAt": "2026-05-24T12:00:00.000Z"
+      }
+    ],
+    "pagination": { "page": 1, "limit": 12, "total": 0, "totalPages": 1 }
+  }
+}
+```
+
+`hidden` posts are excluded from the public feed but remain visible to staff.
+
+---
+
+### `PATCH /api/admin/posts/:id`
+
+Hide or unhide a post. **Body:** `{ "hidden": true }`. **Response `200`** — `{ success, data: { id, hidden } }`
+
+---
+
+### `DELETE /api/admin/posts/:id`
+
+**Admin-only.** Permanently deletes a post plus its likes, comments, and S3 image. **Response `200`** — `{ success, data: { success: true } }`
+
+---
+
+### `GET /api/admin/reports`
+
+Moderation queue. **Query:** `status` (`all` | `open` | `resolved` | `dismissed`, default `open`), `page` (1), `limit` (12).
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "reports": [
+      {
+        "id": "<objectId>",
+        "reporter": { "id": "<objectId>", "name": "Jane", "profilePicture": "https://..." },
+        "targetType": "post",
+        "targetId": "<id>",
+        "targetPreview": "First 140 chars of the post…",
+        "reason": "spam",
+        "note": "optional reporter note",
+        "status": "open",
+        "createdAt": "2026-05-24T12:00:00.000Z"
+      }
+    ],
+    "pagination": { "page": 1, "limit": 12, "total": 0, "totalPages": 1 }
+  }
+}
+```
+
+`targetType`: `post` | `comment` | `user` | `message`. For `message` targets, `targetPreview` is a fixed placeholder — **message content is never exposed**.
+
+---
+
+### `PATCH /api/admin/reports/:id`
+
+Resolve or dismiss a report. **Body:** `{ "status": "resolved" | "dismissed", "action"?: "content_removed" }`. **Response `200`** — `{ success, data: { id, status } }`
+
+---
+
+### `GET /api/admin/audit`
+
+Append-only log of every privileged action (bans, deletes, role changes, report resolutions). **Query:** `page` (1), `limit` (12).
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "entries": [
+      {
+        "id": "<objectId>",
+        "actor": { "id": "<objectId>", "name": "Admin" },
+        "action": "user.banned",
+        "targetType": "user",
+        "targetId": "<id>",
+        "targetLabel": "Jane Doe",
+        "metadata": { "name": "Jane Doe" },
+        "createdAt": "2026-05-24T12:00:00.000Z"
+      }
+    ],
+    "pagination": { "page": 1, "limit": 12, "total": 0, "totalPages": 1 }
+  }
+}
+```
+
+---
+
+## Reports — `/api/reports`
+
+The privacy-safe way for any user to flag content for staff review (the substitute for staff reading private inboxes).
+
+### `POST /api/reports`
+
+🔒 Authenticated (any user).
+
+**Body (JSON)**
+
+| Field | Type | Rules |
+|-------|------|-------|
+| `targetType` | string | `post` \| `comment` \| `user` \| `message` |
+| `targetId` | string | 1–100 chars |
+| `reason` | string | 2–200 chars |
+| `note` | string | optional, max 1000 |
+
+**Response `201`** — `{ success, data: { id, status: "open" } }`
+
+---
+
 ## WebSocket events
 
 **URL:** Same host as HTTP (e.g. `http://localhost:5001`)
@@ -751,6 +1016,7 @@ Ring timeout: **45 seconds** (missed call). Disconnect grace during active call:
 | 201 | Created |
 | 400 | Validation / bad request |
 | 401 | Missing or invalid auth |
+| 403 | Authenticated but not permitted (suspended/banned account, or insufficient role) |
 | 404 | Resource not found |
 | 409 | Conflict (e.g. duplicate email) |
 | 429 | Rate limit exceeded |

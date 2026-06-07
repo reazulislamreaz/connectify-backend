@@ -22,8 +22,10 @@ Built with **Express**, **TypeScript**, **MongoDB**, **Socket.IO**, and optional
 |------|----------------|
 | **API design** | RESTful modules, Zod request validation, consistent `{ success, data \| message }` responses |
 | **Real-time** | Socket.IO with JWT auth, per-user rooms, typing/read receipts, call signaling |
-| **Security** | bcrypt (12 rounds), HTTP-only JWT cookies, CORS allowlist, auth rate limiting |
+| **Security** | bcrypt (12 rounds), HTTP-only JWT cookies, CORS allowlist, Helmet headers, Redis-backed rate limiting (distributed, fail-open) |
+| **Roles & moderation** | RBAC (`user`/`moderator`/`admin`) re-checked from DB per request, privacy-safe admin dashboard, user reports queue, append-only audit log |
 | **Media** | AWS S3 uploads (avatars, post/message images, voice notes) |
+| **Email** | Password-reset & confirmation emails via SMTP **or** Amazon SES, deliverability-tuned templates |
 | **Scale-ready** | Redis cache layer, Socket.IO Redis adapter for multi-instance fan-out |
 | **Calls** | Server-minted ZEGOCLOUD RTC tokens; call state + logs via WebSocket events |
 | **AI (planned)** | On-demand `/api/ai/*` — smart reply, translation, summaries, moderation, transcription |
@@ -39,7 +41,9 @@ Built with **Express**, **TypeScript**, **MongoDB**, **Socket.IO**, and optional
 - **Real-time** — Live delivery, typing indicators, presence (online/last seen) for friends only
 - **Chats** — Conversation list with last message preview and unread counts
 - **Social feed** — Posts with images, likes, threaded comments
-- **Voice calls** — Invite/accept/reject flow over sockets; ZEGOCLOUD RTC tokens from REST
+- **Voice & video calls** — Invite/accept/reject flow over sockets; `callType` (`audio`/`video`); ZEGOCLOUD RTC tokens from REST
+- **Password reset** — Email-based forgot/reset flow (single-use, 60-min token) via SMTP or Amazon SES
+- **Admin & moderation** — Staff-only dashboard: aggregate stats, user management (suspend/ban/role), public-content moderation, user-report queue, and an immutable audit log — without ever reading private messages
 - **Operations** — Health check, graceful shutdown, structured error handling
 
 ---
@@ -182,6 +186,7 @@ src/
 │   ├── chat/              # Conversation list
 │   ├── post/              # Feed, likes, comments
 │   ├── call/              # ZEGOCLOUD config & tokens
+│   ├── admin/             # Staff dashboard, moderation, reports, audit log
 │   └── ai/                # (planned) LLM features — smart reply, translate, summarize, etc.
 ├── socket/                # Real-time handlers (messages, calls)
 ├── services/              # Presence
@@ -231,8 +236,14 @@ Copy `.env.example` to `.env` and configure:
 | `REDIS_ENABLED` | No | Set `true` to enable caching |
 | `SOCKET_REDIS_ADAPTER` | No | Enable Socket.IO Redis adapter (needs Redis) |
 | `ZEGOCLOUD_*` | No | App ID, sign, secret, server URL for calls |
+| `FRONTEND_URL` | No | Base URL used in email links (falls back to first non-localhost `CLIENT_URL`) |
+| `MAIL_PROVIDER` | No | `smtp` (default) or `ses` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | No | SMTP server (when `MAIL_PROVIDER=smtp`) |
+| `SMTP_USER` / `SMTP_PASS` | No | SMTP credentials |
+| `MAIL_FROM` / `MAIL_FROM_NAME` | No | Sender address & display name (SES requires a verified `MAIL_FROM`) |
+| `MAIL_PLAIN_ONLY` | No | Force text-only emails (defaults `true` for Gmail SMTP senders) |
 
-See [`.env.example`](.env.example) for a full template.
+Email is optional: when SMTP/SES is not configured, password-reset emails are skipped (logged in development). See [`.env.example`](.env.example) for a full template, including Google Workspace and SES setup notes.
 
 ### Run locally
 
@@ -306,8 +317,12 @@ Quick reference:
 | `/api/chats` | Conversation list, delete thread |
 | `/api/posts` | Feed, posts, likes, comments |
 | `/api/calls` | ZEGOCLOUD config & RTC tokens |
+| `/api/admin` | Staff-only: stats, users, content moderation, reports, audit log |
+| `/api/reports` | File a report on a post/comment/user/message (any user) |
 
 **Authentication:** Protected routes accept `Authorization: Bearer <token>` or the `token` HTTP-only cookie set on register/login.
+
+**Authorization:** Users have a `role` (`user`/`moderator`/`admin`). `/api/admin/*` requires staff; some actions require `admin`. The JWT `role` is a UI hint only — the server re-checks role and account status against the database on every staff request. Seed the first admin with `npx tsx scripts/make-admin.ts you@example.com`.
 
 **WebSocket:** Connect to the same host as the HTTP server. Pass JWT via `auth.token` or `Authorization` header. See [docs/API.md](docs/API.md#websocket-events).
 
