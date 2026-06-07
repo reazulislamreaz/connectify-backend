@@ -247,6 +247,7 @@ export class AdminService {
     }
     if (update.role) {
       await this.audit(actor.id, "user.role_change", "user", id, {
+        name: target.name,
         from: target.role,
         to: update.role,
       });
@@ -492,6 +493,27 @@ export class AdminService {
       AuditLog.countDocuments({}),
     ]);
 
+    // Resolve user targets to names so the table reads "Reazul Islam", not an id.
+    const userTargetIds = docs
+      .filter((e) => e.targetType === "user" && mongoose.isValidObjectId(e.targetId))
+      .map((e) => e.targetId);
+    const targetUsers = userTargetIds.length
+      ? await User.find({ _id: { $in: userTargetIds } }).select("name").lean()
+      : [];
+    const nameMap = new Map(targetUsers.map((u) => [u._id.toString(), u.name]));
+
+    const labelFor = (e: (typeof docs)[number]): string => {
+      const metaName =
+        e.metadata && typeof e.metadata.name === "string"
+          ? (e.metadata.name as string)
+          : undefined;
+      if (e.targetType === "user") {
+        // Live name → name captured at action time → short id (deleted user).
+        return nameMap.get(e.targetId) ?? metaName ?? `user ${e.targetId.slice(-6)}`;
+      }
+      return metaName ?? `${e.targetType} ${e.targetId.slice(-6)}`;
+    };
+
     return {
       entries: docs.map((e) => {
         const actor = e.actorId as unknown as {
@@ -507,6 +529,7 @@ export class AdminService {
           action: e.action,
           targetType: e.targetType,
           targetId: e.targetId,
+          targetLabel: labelFor(e),
           metadata: e.metadata,
           createdAt: e.createdAt,
         };
