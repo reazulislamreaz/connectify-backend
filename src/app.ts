@@ -26,6 +26,8 @@ import messageRoutes from "./modules/message/message.route";
 import chatRoutes from "./modules/chat/chat.route";
 import postRoutes from "./modules/post/post.route";
 import callRoutes from "./modules/call/call.route";
+import adminRoutes from "./modules/admin/admin.route";
+import reportRoutes from "./modules/admin/report.route";
 
 const app = express();
 
@@ -75,6 +77,8 @@ app.use("/api/messages", messageRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/calls", callRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/reports", reportRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -76,15 +76,18 @@ export class PostService {
   private async fetchFeed(userId: string, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
 
+    // Moderator-hidden posts never appear in the public feed.
+    const feedFilter = { hidden: { $ne: true } };
+
     const [posts, total] = await Promise.all([
-      Post.find()
+      Post.find(feedFilter)
         .select("authorId content imageUrl likesCount commentsCount createdAt")
         .populate("authorId", "name profilePicture")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      Post.countDocuments(),
+      Post.countDocuments(feedFilter),
     ]);
 
     const postIds = posts.map((p) => p._id);

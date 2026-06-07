@@ -1,5 +1,15 @@
 import mongoose, { Document, Schema } from "mongoose";
 
+export type UserRole = "user" | "moderator" | "admin";
+export type AccountStatus = "active" | "suspended" | "banned";
+
+export const USER_ROLES: UserRole[] = ["user", "moderator", "admin"];
+export const ACCOUNT_STATUSES: AccountStatus[] = [
+  "active",
+  "suspended",
+  "banned",
+];
+
 export interface IUser extends Document {
   _id: mongoose.Types.ObjectId;
   name: string;
@@ -14,6 +24,12 @@ export interface IUser extends Document {
   dateOfBirth?: Date;
   isOnline: boolean;
   lastSeen: Date;
+  /** Staff role. Set server-side only — never from registration input. */
+  role: UserRole;
+  /** Moderation state. "suspended"/"banned" block sign-in. */
+  status: AccountStatus;
+  /** When a suspension auto-expires (optional). */
+  suspendedUntil?: Date;
   passwordResetToken?: string;
   passwordResetExpires?: Date;
   createdAt: Date;
@@ -40,6 +56,19 @@ const userSchema = new Schema<IUser>(
     dateOfBirth: { type: Date },
     isOnline: { type: Boolean, default: false },
     lastSeen: { type: Date, default: Date.now },
+    role: {
+      type: String,
+      enum: USER_ROLES,
+      default: "user",
+      index: true,
+    },
+    status: {
+      type: String,
+      enum: ACCOUNT_STATUSES,
+      default: "active",
+      index: true,
+    },
+    suspendedUntil: { type: Date },
     passwordResetToken: { type: String, select: false },
     passwordResetExpires: { type: Date, select: false },
   },
@@ -50,5 +79,6 @@ userSchema.index({ name: 1 });
 userSchema.index({ isOnline: 1, lastSeen: -1 });
 userSchema.index({ name: "text", email: "text" });
 userSchema.index({ passwordResetToken: 1 });
+userSchema.index({ createdAt: -1 });
 
 export const User = mongoose.model<IUser>("User", userSchema);

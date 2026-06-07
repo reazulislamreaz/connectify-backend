@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import mongoose from "mongoose";
-import { User } from "./auth.model";
+import { User, type UserRole, type AccountStatus } from "./auth.model";
 import { signToken } from "../../utils/jwt";
 import { AppError } from "../../utils/AppError";
 import { env } from "../../config/env";
@@ -58,6 +58,13 @@ export class AuthService {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       throw new AppError(401, "Invalid email or password");
+    }
+
+    if (user.status === "banned") {
+      throw new AppError(403, "This account has been banned.");
+    }
+    if (user.status === "suspended") {
+      throw new AppError(403, "This account is suspended. Contact support.");
     }
 
     const token = signToken({ userId: user._id.toString(), email: user.email });
@@ -275,12 +282,16 @@ export class AuthService {
     religious?: string;
     hobby?: string;
     dateOfBirth?: Date;
+    role?: UserRole;
+    status?: AccountStatus;
   }) {
     return {
       id: user._id.toString(),
       name: user.name,
       email: user.email,
       profilePicture: resolveImageUrl(user.profilePicture),
+      role: user.role ?? "user",
+      status: user.status ?? "active",
     };
   }
 }

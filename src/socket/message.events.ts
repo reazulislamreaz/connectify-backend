@@ -37,6 +37,25 @@ export function setSocketServer(server: Server): void {
   io = server;
 }
 
+export function getSocketServer(): Server | null {
+  return io;
+}
+
+/** Count of live socket connections (used by the admin health endpoint). */
+export function getConnectionCount(): number {
+  return io ? io.engine.clientsCount : 0;
+}
+
+/**
+ * Force a user out of all live sessions by disconnecting their sockets.
+ * Note: a stateless JWT stays valid until it expires — for full revocation add
+ * a per-user tokenVersion to the JWT and check it in authenticate(). This kicks
+ * active connections immediately, which is what a moderator expects to see.
+ */
+export function disconnectUser(userId: string): void {
+  io?.to(`user:${userId}`).disconnectSockets(true);
+}
+
 function emitToParticipants(
   message: Pick<MessagePayload, "senderId" | "receiverId">,
   event: string,

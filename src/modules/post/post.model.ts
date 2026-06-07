@@ -6,6 +6,8 @@ export interface IPost extends Document {
   imageUrl?: string;
   likesCount: number;
   commentsCount: number;
+  /** Hidden by a moderator — excluded from the public feed. */
+  hidden: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,12 +33,14 @@ const postSchema = new Schema<IPost>(
     imageUrl: { type: String, default: "" },
     likesCount: { type: Number, default: 0 },
     commentsCount: { type: Number, default: 0 },
+    hidden: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
 
 postSchema.index({ createdAt: -1 });
 postSchema.index({ authorId: 1, createdAt: -1 });
+postSchema.index({ hidden: 1, createdAt: -1 });
 
 const postLikeSchema = new Schema<IPostLike>(
   {

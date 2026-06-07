@@ -1,7 +1,10 @@
 export const USER_PUBLIC_SELECT =
   "name email profilePicture address professional religious hobby relationStatus dateOfBirth isOnline lastSeen";
 export const USER_PROFILE_SELECT =
-  "name email profilePicture address professional religious hobby relationStatus dateOfBirth isOnline lastSeen createdAt";
+  "name email profilePicture address professional religious hobby relationStatus dateOfBirth isOnline lastSeen role status createdAt";
+/** Columns the admin user table needs. */
+export const ADMIN_USER_SELECT =
+  "name email profilePicture role status isOnline lastSeen createdAt";
 export const USER_LIST_SELECT =
   "name email profilePicture address professional religious hobby relationStatus dateOfBirth isOnline lastSeen";
 export const USER_EXISTS_SELECT = "_id";
